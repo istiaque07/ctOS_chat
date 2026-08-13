@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ctOS - Decentralized IP Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ctos: {
+                            bg: '#0a0e17',
+                            card: '#131b2e',
+                            border: '#1e293b',
+                            accent: '#00ff66',
+                            accentHover: '#00cc52',
+                            text: '#e2e8f0',
+                            muted: '#64748b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- QRCode generator and scanner libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            -webkit-tap-highlight-color: transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0e17;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00ff66;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 102, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(0, 255, 102, 0.4); }
+        }
+        .glow-box {
+            animation: pulseGlow 4s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-ctos-bg text-ctos-text h-[100dvh] flex flex-col overflow-hidden selection:bg-ctos-accent selection:text-black">
+
+    <div id="login-screen" class="fixed inset-0 bg-ctos-bg z-50 flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-ctos-card border border-ctos-border rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl glow-box">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                    <i data-lucide="terminal" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-wider text-white">ctOS NODE LOGIN</h1>
+                <p class="text-xs text-ctos-muted">Decentralized P2P Mesh & Bluetooth Gateway</p>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div class="space-y-1.5">
+                    <label class="text-xs text-ctos-muted block">Operator Codename / Alias</label>
+                    <input type="text" id="login-username" required placeholder="e.g. Neo / Zero" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-sm text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent transition-colors" autocomplete="off">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs text-ctos-muted block">Custom Peer ID Suffix (Optional)</label>
+                    <input type="text" id="login-custom-id" placeholder="leave blank for auto-generated ID" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-xs text-ctos-accent font-mono placeholder-ctos-muted focus:outline-none focus:border-ctos-accent transition-colors" autocomplete="off">
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-ctos-accent hover:bg-ctos-accentHover text-black font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 shadow-lg shadow-ctos-accent/10">
+                    <span>Initialize Mesh Node</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </form>
+
+            <div class="border-t border-ctos-border pt-4 text-center text-[10px] text-ctos-muted">
+                Multi-peer WebRTC mesh tunnels, Bluetooth LE, & QR pairing enabled.
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-ctos-card border-b border-ctos-border px-3 sm:px-4 py-3 flex items-center justify-between shrink-0 z-10">
+        <div class="flex items-center space-x-2.5">
+            <button onclick="toggleMobileSidebar()" class="md:hidden p-2 rounded-lg bg-ctos-bg border border-ctos-border text-ctos-accent hover:border-ctos-accent transition-colors">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+            </button>
+            <div class="bg-ctos-accent/10 border border-ctos-accent/30 p-1.5 sm:p-2 rounded-lg text-ctos-accent glow-box hidden sm:flex">
+                <i data-lucide="terminal" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm sm:text-lg tracking-wider text-white flex items-center gap-2">
+                    ctOS <span id="operator-badge" class="text-[10px] sm:text-xs bg-ctos-accent text-black px-1.5 py-0.5 rounded font-bold">OPERATOR</span>
+                </h1>
+                <p class="text-[10px] sm:text-xs text-ctos-muted hidden xs:block">Multi-Peer & Bluetooth Mesh</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2 sm:space-x-3">
+            <div id="connection-status" class="flex items-center space-x-1.5 sm:space-x-2 bg-ctos-bg px-2.5 py-1.5 rounded-full border border-ctos-border text-[11px] sm:text-xs">
+                <span class="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-yellow-500 animate-pulse shrink-0" id="status-dot"></span>
+                <span id="status-text" class="text-ctos-muted truncate max-w-[100px] sm:max-w-none">Connecting...</span>
+            </div>
+            <button onclick="toggleModal('console-modal')" class="p-2 rounded-lg bg-ctos-bg border border-ctos-border text-ctos-accent hover:border-ctos-accent transition-colors relative" title="Live Console Diagnostics">
+                <i data-lucide="code" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                <span id="console-badge" class="absolute -top-1 -right-1 w-2 h-2 bg-ctos-accent rounded-full animate-ping"></span>
+            </button>
+            <button onclick="toggleModal('info-modal')" class="p-2 rounded-lg bg-ctos-bg border border-ctos-border text-ctos-text hover:border-ctos-accent transition-colors" title="System Info">
+                <i data-lucide="info" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- Sidebar Panel -->
+        <aside id="sidebar-panel" class="absolute md:relative inset-y-0 left-0 w-80 bg-ctos-card border-r border-ctos-border flex flex-col shrink-0 z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl md:shadow-none">
+            <div class="p-4 border-b border-ctos-border flex items-center justify-between">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-ctos-accent flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4"></i> Mesh Node Network
+                </h2>
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-ctos-muted hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-4 space-y-4 overflow-y-auto flex-1">
+                <!-- My Peer ID Box -->
+                <div class="space-y-1.5">
+                    <label class="text-xs text-ctos-muted block">Your Peer Address & QR</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="my-peer-id" readonly class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2 text-xs text-ctos-accent font-mono select-all focus:outline-none" value="Awaiting Login...">
+                        <button onclick="copyMyId()" class="p-2.5 bg-ctos-accent text-black font-bold rounded-xl hover:bg-ctos-accentHover transition-colors shrink-0" title="Copy Address">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="openMyQrModal()" class="p-2.5 bg-ctos-bg border border-ctos-accent/40 text-ctos-accent hover:bg-ctos-accent/10 rounded-xl transition-colors shrink-0" title="Show QR Code">
+                            <i data-lucide="qr-code" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bluetooth LE Radio Bridge Section -->
+                <div class="space-y-2 pt-2 border-t border-ctos-border">
+                    <label class="text-xs font-bold text-ctos-accent uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="bluetooth" class="w-3.5 h-3.5"></i> Bluetooth LE Radio Bridge
+                    </label>
+                    <div class="flex gap-2">
+                        <button onclick="scanBluetoothDevices()" class="flex-1 py-2.5 bg-ctos-bg border border-ctos-accent/40 text-ctos-accent hover:bg-ctos-accent/10 rounded-xl text-xs transition-colors font-bold flex items-center justify-center gap-1.5">
+                            <i data-lucide="radio" class="w-3.5 h-3.5"></i> Scan BT Node
+                        </button>
+                        <button onclick="disconnectBluetooth()" id="bt-disconnect-btn" class="px-3 py-2.5 bg-ctos-bg border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-xl text-xs transition-colors hidden font-bold" title="Disconnect Bluetooth">
+                            <i data-lucide="wifi-off" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                    <div id="bt-status-label" class="text-[10px] text-ctos-muted font-mono italic">Radio idle. Click Scan to pair Bluetooth peripheral.</div>
+                </div>
+
+                <!-- Connect to Remote Peer -->
+                <div class="space-y-1.5 pt-2 border-t border-ctos-border">
+                    <label class="text-xs text-ctos-muted block">Connect to Peer ID</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="target-peer-id" placeholder="Enter Peer ID..." class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2 text-xs text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent">
+                        <button onclick="openQrScannerModal()" class="p-2.5 bg-ctos-bg border border-ctos-accent/40 text-ctos-accent hover:bg-ctos-accent/10 rounded-xl transition-colors shrink-0" title="Scan QR Code">
+                            <i data-lucide="scan" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="connectToPeer()" class="px-3.5 py-2.5 bg-ctos-accent text-black font-bold rounded-xl hover:bg-ctos-accentHover transition-colors text-xs shrink-0 flex items-center gap-1">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Connect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active ChatList & Groups -->
+                <div class="pt-4 border-t border-ctos-border space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-ctos-muted uppercase tracking-wider">Active ChatList</span>
+                        <button onclick="openCreateGroupModal()" class="text-[10px] bg-ctos-accent/10 hover:bg-ctos-accent/20 border border-ctos-accent/30 text-ctos-accent px-2 py-1 rounded-lg transition-colors flex items-center gap-1 font-bold">
+                            <i data-lucide="users" class="w-3 h-3"></i> + Group
+                        </button>
+                    </div>
+                    <div id="active-peer-list" class="space-y-1.5 max-h-56 overflow-y-auto text-xs">
+                        <p class="text-ctos-muted text-center py-6 italic text-xs">No active peers or groups.</p>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="pt-4 border-t border-ctos-border">
+                    <button onclick="clearChat()" class="w-full py-2.5 bg-ctos-bg border border-ctos-border hover:border-red-500 hover:text-red-400 rounded-xl text-xs transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Clear Buffer History
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3 bg-ctos-bg border-t border-ctos-border text-center text-[10px] text-ctos-muted">
+                ctOS Mesh v2.4 • Multi-Peer & BT
+            </div>
+        </aside>
+
+        <!-- Sidebar Backdrop for Mobile -->
+        <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/60 z-20 md:hidden hidden backdrop-blur-sm"></div>
+
+        <section class="flex-1 flex flex-col bg-ctos-bg overflow-hidden relative">
+            <div class="bg-ctos-card/50 backdrop-blur border-b border-ctos-border px-3 sm:px-4 py-3 flex items-center justify-between shrink-0">
+                <div class="flex items-center space-x-3 overflow-hidden">
+                    <div class="w-2.5 h-2.5 rounded-full bg-ctos-accent animate-ping shrink-0" id="chat-header-indicator"></div>
+                    <div class="overflow-hidden">
+                        <h3 id="current-chat-title" class="text-xs sm:text-sm font-bold text-white truncate">Broadcast / Unconnected Channel</h3>
+                        <p id="current-chat-subtitle" class="text-[10px] sm:text-xs text-ctos-muted truncate">Select a peer or group chat channel from the left sidebar.</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <span id="transfer-stats" class="text-[10px] sm:text-xs text-ctos-muted hidden lg:inline">Packets: 0 sent / 0 received</span>
+                </div>
+            </div>
+
+            <!-- Message Container -->
+            <div id="message-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col">
+                <div class="my-auto mx-auto text-center max-w-sm sm:max-w-md p-6 bg-ctos-card border border-ctos-border rounded-2xl space-y-3 shadow-xl">
+                    <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                        <i data-lucide="shield" class="w-6 h-6"></i>
+                    </div>
+                    <h4 class="text-white font-bold text-sm sm:text-base">Secure Multi-Peer Mesh Ready</h4>
+                    <p class="text-xs text-ctos-muted leading-relaxed">Connect to multiple peers simultaneously, form mesh group rooms, or bridge over Bluetooth LE.</p>
+                </div>
+            </div>
+
+            <!-- Message Input Form -->
+            <div class="bg-ctos-card border-t border-ctos-border p-3 sm:p-4 shrink-0">
+                <form id="chat-form" onsubmit="sendMessage(event)" class="flex items-center gap-2">
+                    <label class="p-2.5 bg-ctos-bg border border-ctos-border hover:border-ctos-accent rounded-xl text-ctos-muted hover:text-ctos-accent cursor-pointer transition-colors shrink-0" title="Send File / Attachment">
+                        <i data-lucide="paperclip" class="w-5 h-5"></i>
+                        <input type="file" id="file-input" onchange="sendFile(event)" class="hidden">
+                    </label>
+
+                    <input type="text" id="message-input" placeholder="Type decentralized message..." class="flex-1 bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent transition-colors" autocomplete="off" disabled>
+
+                    <button type="submit" id="send-btn" disabled class="bg-ctos-accent hover:bg-ctos-accentHover text-black font-extrabold px-5 py-3 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 text-xs sm:text-sm shadow-lg shadow-ctos-accent/10">
+                        <span>Send</span>
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Create Group Modal -->
+    <div id="group-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-3">
+                <h3 class="font-bold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="users" class="w-4 h-4 text-ctos-accent"></i> Create Mesh Group Room
+                </h3>
+                <button onclick="toggleModal('group-modal')" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div class="space-y-1">
+                    <label class="text-xs text-ctos-muted">Group Name</label>
+                    <input type="text" id="group-name-input" placeholder="e.g. StrikeTeam-Alpha" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2.5 text-xs text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs text-ctos-muted">Select Active Peers for Group</label>
+                    <div id="group-peer-checkboxes" class="space-y-1.5 max-h-36 overflow-y-auto bg-ctos-bg p-2 rounded-xl border border-ctos-border text-xs">
+                        <p class="text-ctos-muted italic">No active peers available to group.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="pt-2 flex gap-3">
+                <button onclick="toggleModal('group-modal')" class="flex-1 py-2.5 bg-ctos-bg border border-ctos-border rounded-xl text-xs text-ctos-muted hover:text-white transition-colors">
+                    Cancel
+                </button>
+                <button onclick="createMeshGroup()" class="flex-1 py-2.5 bg-ctos-accent text-black font-bold rounded-xl text-xs hover:bg-ctos-accentHover transition-colors shadow-lg">
+                    Initialize Group Room
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- My QR Code Modal -->
+    <div id="my-qr-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-xs w-full p-6 space-y-4 shadow-2xl text-center">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-2">
+                <h3 class="font-bold text-xs text-ctos-accent uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="qr-code" class="w-4 h-4"></i> Operator QR Code
+                </h3>
+                <button onclick="toggleModal('my-qr-modal')" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-[11px] text-ctos-muted">Scan this code with another ctOS node to connect instantly.</p>
+            <div id="qrcode-container" class="bg-white p-3 rounded-2xl mx-auto inline-block flex items-center justify-center min-h-[160px] min-w-[160px]"></div>
+            <div id="qr-peer-id-label" class="font-mono text-[10px] text-ctos-accent truncate"></div>
+            <button onclick="toggleModal('my-qr-modal')" class="w-full py-2 bg-ctos-bg border border-ctos-border hover:border-ctos-accent rounded-xl text-xs text-white transition-colors">Close</button>
+        </div>
+    </div>
+
+    <!-- QR Scanner Modal -->
+    <div id="qr-scanner-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-2">
+                <h3 class="font-bold text-xs text-ctos-accent uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="scan" class="w-4 h-4"></i> Scan Peer QR Code
+                </h3>
+                <button onclick="closeQrScannerModal()" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="reader" class="w-full rounded-xl overflow-hidden border border-ctos-border bg-ctos-bg"></div>
+            <p class="text-[10px] text-ctos-muted text-center">Position the peer QR code within your camera frame to establish connection.</p>
+            <button onclick="closeQrScannerModal()" class="w-full py-2 bg-ctos-bg border border-ctos-border hover:border-red-500 rounded-xl text-xs text-ctos-muted hover:text-red-400 transition-colors">Cancel Scan</button>
+        </div>
+    </div>
+
+    <!-- Console Diagnostics Modal -->
+    <div id="console-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-2xl w-full p-4 sm:p-6 space-y-4 shadow-2xl flex flex-col h-[500px]">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-3 shrink-0">
+                <h3 class="font-bold text-xs sm:text-sm text-white flex items-center gap-2">
+                    <i data-lucide="code" class="text-ctos-accent w-4 h-4"></i> Real-time Mesh Console Stream
+                </h3>
+                <button onclick="toggleModal('console-modal')" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="console-logs" class="flex-1 bg-ctos-bg border border-ctos-border rounded-xl p-3 font-mono text-[10px] sm:text-[11px] text-ctos-accent overflow-y-auto space-y-1">
+                <p class="text-ctos-muted">[System] Console diagnostic logger initialized...</p>
+            </div>
+            <div class="pt-2 border-t border-ctos-border flex justify-between items-center shrink-0">
+                <span class="text-[10px] sm:text-xs text-ctos-muted">WebRTC Mesh & BT LE monitor</span>
+                <button onclick="clearConsoleLogs()" class="px-3 py-1.5 bg-ctos-bg border border-ctos-border rounded-lg text-xs hover:border-ctos-accent text-white">
+                    Clear Logs
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-3">
+                <h3 class="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                    <i data-lucide="terminal" class="text-ctos-accent w-5 h-5"></i> About ctOS Mesh Architecture
+                </h3>
+                <button onclick="toggleModal('info-modal')" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3 text-xs text-ctos-muted leading-relaxed">
+                <p>
+                    <strong class="text-white">ctOS</strong> হলো একটি সম্পূর্ণ ডিসেন্ট্রালাইজড মাল্টি-পিয়ার ও ব্লুটুথ মেশ চ্যাট অ্যাপ্লিকেশন। এটি যুগপৎ একাধিক WebRTC DataChannel পিয়ার এবং Web Bluetooth LE ব্রিজিং সমর্থন করে।
+                </p>
+                <div class="bg-ctos-bg p-3 rounded-xl border border-ctos-border space-y-2 font-mono text-white text-[11px]">
+                    <p class="text-ctos-accent font-bold">Key Capabilities:</p>
+                    <p>• <span class="text-ctos-muted">Multi-Peer Mesh:</span> Connect with multiple nodes simultaneously.</p>
+                    <p>• <span class="text-ctos-muted">Bluetooth LE:</span> Radio bridge communication for offline proximity nodes.</p>
+                    <p>• <span class="text-ctos-muted">QR Pairing:</span> Instant peer address exchange via camera scan.</p>
+                </div>
+            </div>
+            <div class="pt-3 border-t border-ctos-border flex justify-end">
+                <button onclick="toggleModal('info-modal')" class="px-4 py-2 bg-ctos-accent text-black font-bold rounded-xl text-xs hover:bg-ctos-accentHover transition-colors">
+                    Understood
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let peer = null;
+        let connections = {}; // Map of peerId -> DataConnection
+        let activeChatId = null; // Currently selected chat channel (peerId or groupId or 'bluetooth')
+        let groups = {}; // Map of groupId -> { name: string, members: [string] }
+        let chatHistories = {}; // Map of chatId -> Array of messages
+        let myId = '';
+        let operatorName = 'Operator';
+        let packetsSent = 0;
+        let packetsReceived = 0;
+
+        // Bluetooth LE state variables
+        let bluetoothDevice = null;
+        let bluetoothCharacteristic = null;
+        let isBluetoothConnected = false;
+        let html5QrCodeScanner = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) lucide.createIcons();
+            const cachedName = localStorage.getItem('ctos_operator_name');
+            const cachedCustomId = localStorage.getItem('ctos_custom_id');
+            const cachedGroups = localStorage.getItem('ctos_groups');
+            if (cachedName) document.getElementById('login-username').value = cachedName;
+            if (cachedCustomId) document.getElementById('login-custom-id').value = cachedCustomId;
+            if (cachedGroups) {
+                try { groups = JSON.parse(cachedGroups); } catch(e){}
+            }
+        });
+
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar-panel');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden') && window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-5 right-5 bg-ctos-card border border-ctos-accent text-ctos-accent px-4 py-2.5 rounded-xl text-xs shadow-2xl z-50 flex items-center gap-2 animate-bounce';
+            toast.innerHTML = `<i data-lucide="info" class="w-4 h-4"></i> <span>${message}</span>`;
+            document.body.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Console diagnostics logger
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        function logToConsoleUI(type, args) {
+            const container = document.getElementById('console-logs');
+            if (!container) return;
+            const p = document.createElement('p');
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-ctos-accent';
+            if (type === 'warn') colorClass = 'text-yellow-400';
+            if (type === 'error') colorClass = 'text-red-400';
+            p.className = `font-mono ${colorClass}`;
+            p.textContent = `[${timestamp}] [${type.toUpperCase()}] ${Array.from(args).map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`;
+            container.appendChild(p);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        console.log = function() { originalLog.apply(console, arguments); logToConsoleUI('log', arguments); };
+        console.warn = function() { originalWarn.apply(console, arguments); logToConsoleUI('warn', arguments); };
+        console.error = function() { originalError.apply(console, arguments); logToConsoleUI('error', arguments); };
+
+        function clearConsoleLogs() {
+            document.getElementById('console-logs').innerHTML = '<p class="text-ctos-muted">[System] Console logs cleared.</p>';
+        }
+
+        // Login Handler
+        function handleLogin(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('login-username').value.trim();
+            const customSuffix = document.getElementById('login-custom-id').value.trim();
+            if (!usernameInput) return;
+
+            operatorName = usernameInput;
+            document.getElementById('operator-badge').textContent = operatorName.toUpperCase();
+            localStorage.setItem('ctos_operator_name', operatorName);
+            localStorage.setItem('ctos_custom_id', customSuffix);
+            document.getElementById('login-screen').classList.add('hidden');
+
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let randomPart = '';
+            for (let i = 0; i < 5; i++) {
+                randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            myId = customSuffix ? `ctos-${customSuffix}-${randomPart}` : `ctos-${operatorName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${randomPart}`;
+            initRealPeer(myId);
+        }
+
+        function initRealPeer(assignedId) {
+            updateStatus('yellow', 'Connecting...');
+            console.log(`Initializing Multi-Peer node with ID: ${assignedId}`);
+
+            try {
+                peer = new Peer(assignedId, {
+                    host: '0.peerjs.com',
+                    port: 443,
+                    secure: true,
+                    config: {
+                        'iceServers': [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    },
+                    debug: 2
+                });
+
+                peer.on('open', (id) => {
+                    myId = id;
+                    document.getElementById('my-peer-id').value = id;
+                    updateStatus('green', 'Mesh Online');
+                    console.log(`Peer successfully connected to signaling server: ${id}`);
+                    appendSystemMessage(`Mesh Node initialized. ID: ${id}`);
+                });
+
+                peer.on('connection', (incomingConn) => {
+                    console.log(`Incoming connection request from: ${incomingConn.peer}`);
+                    setupConnection(incomingConn);
+                    appendSystemMessage(`Incoming connection established with peer: ${incomingConn.peer}`);
+                });
+
+                peer.on('error', (err) => {
+                    console.error('PeerJS error:', err);
+                    updateStatus('red', `Error: ${err.type || 'Failed'}`);
+                    showToast(`P2P Error: ${err.type || 'Check console'}`);
+                });
+
+                peer.on('disconnected', () => {
+                    console.warn('Disconnected from signaling server. Reconnecting...');
+                    updateStatus('yellow', 'Reconnecting...');
+                    peer.reconnect();
+                });
+            } catch(e) {
+                console.error('Exception initializing peer:', e);
+                updateStatus('red', 'Exception');
+            }
+        }
+
+        function updateStatus(color, text) {
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            dot.className = `w-2.5 h-2.5 rounded-full ${color === 'green' ? 'bg-ctos-accent' : color === 'yellow' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'} shrink-0`;
+            statusText.textContent = text;
+        }
+
+        function copyMyId() {
+            const input = document.getElementById('my-peer-id');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(input.value).then(() => showToast('Peer ID copied to clipboard!'));
+            } else {
+                input.select();
+                document.execCommand('copy');
+                showToast('Peer ID copied!');
+            }
+        }
+
+        function openMyQrModal() {
+            if (!myId || myId.includes('Awaiting')) {
+                showToast('Peer ID not ready yet');
+                return;
+            }
+            const container = document.getElementById('qrcode-container');
+            container.innerHTML = '';
+            try {
+                new QRCode(container, {
+                    text: myId,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#050b0f",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } catch(e) {
+                container.textContent = myId;
+            }
+            document.getElementById('qr-peer-id-label').textContent = myId;
+            toggleModal('my-qr-modal');
+        }
+
+        function openQrScannerModal() {
+            document.getElementById('qr-scanner-modal').classList.remove('hidden');
+            setTimeout(() => {
+                if (!html5QrCodeScanner) {
+                    html5QrCodeScanner = new Html5Qrcode("reader");
+                }
+                html5QrCodeScanner.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 220, height: 220 } },
+                    (decodedText) => {
+                        const cleanId = decodedText.trim();
+                        if (cleanId) {
+                            document.getElementById('target-peer-id').value = cleanId;
+                            closeQrScannerModal();
+                            showToast(`Scanned Peer: ${cleanId}`);
+                            connectToPeer();
+                        }
+                    },
+                    (errorMessage) => {}
+                ).catch(err => {
+                    console.error("Camera error:", err);
+                    showToast("Camera permission denied.");
+                    closeQrScannerModal();
+                });
+            }, 300);
+        }
+
+        function closeQrScannerModal() {
+            document.getElementById('qr-scanner-modal').classList.add('hidden');
+            if (html5QrCodeScanner) {
+                html5QrCodeScanner.stop().catch(() => {}).finally(() => {
+                    try { html5QrCodeScanner.clear(); } catch(e){}
+                    html5QrCodeScanner = null;
+                });
+            }
+        }
+
+        // Bluetooth LE Radio Bridge Integration
+        async function scanBluetoothDevices() {
+            try {
+                if (!navigator.bluetooth) {
+                    showToast("Web Bluetooth API is not supported on this browser/device.");
+                    document.getElementById('bt-status-label').textContent = "Web Bluetooth not supported.";
+                    return;
+                }
+                document.getElementById('bt-status-label').textContent = "Scanning Bluetooth LE nodes...";
+                console.log("Requesting Bluetooth device...");
+                
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ['battery_service', 'generic_access']
+                });
+
+                document.getElementById('bt-status-label').textContent = `Connecting to ${bluetoothDevice.name || 'BT Device'}...`;
+                const server = await bluetoothDevice.gatt.connect();
+                isBluetoothConnected = true;
+                
+                document.getElementById('bt-status-label').textContent = `Connected: ${bluetoothDevice.name || 'BLE Node'}`;
+                document.getElementById('bt-disconnect-btn').classList.remove('hidden');
+                showToast(`Bluetooth LE paired with ${bluetoothDevice.name || 'Node'}`);
+                
+                // Switch to bluetooth channel view
+                selectChatChannel('bluetooth');
+                appendSystemMessage(`Bluetooth LE Radio bridge connected to ${bluetoothDevice.name || 'Peripheral'}`);
+            } catch (err) {
+                console.error("Bluetooth pairing error:", err);
+                document.getElementById('bt-status-label').textContent = "Bluetooth pairing failed or cancelled.";
+                showToast("Bluetooth pairing cancelled.");
+            }
+        }
+
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            bluetoothDevice = null;
+            isBluetoothConnected = false;
+            document.getElementById('bt-status-label').textContent = "Radio idle. Click Scan to pair Bluetooth peripheral.";
+            document.getElementById('bt-disconnect-btn').classList.add('hidden');
+            showToast("Bluetooth disconnected");
+            if (activeChatId === 'bluetooth') {
+                selectChatChannel(null);
+            }
+            updateActivePeerUI();
+        }
+
+        // Multi-Peer Connection Management
+        function connectToPeer() {
+            const targetId = document.getElementById('target-peer-id').value.trim();
+            if (!targetId) {
+                showToast('Please enter a valid Peer ID');
+                return;
+            }
+            if (targetId === myId) {
+                showToast('Cannot connect to your own node ID');
+                return;
+            }
+            if (connections[targetId]) {
+                showToast('Already connected to this peer');
+                selectChatChannel(targetId);
+                return;
+            }
+
+            console.log(`Connecting to peer: ${targetId}`);
+            if (!peer || peer.destroyed) {
+                showToast('Peer node not active.');
+                return;
+            }
+
+            const outgoingConn = peer.connect(targetId, { reliable: true });
+            setupConnection(outgoingConn);
+        }
+
+        function setupConnection(connection) {
+            const peerId = connection.peer;
+
+            connection.on('open', () => {
+                connections[peerId] = connection;
+                updateActivePeerUI();
+                console.log(`WebRTC DataChannel opened with peer: ${peerId}`);
+                appendSystemMessage(`Secure tunnel opened with ${peerId}`);
+                showToast(`Connected to ${peerId}`);
+                
+                if (!activeChatId) {
+                    selectChatChannel(peerId);
+                }
+                if (window.innerWidth < 768) {
+                    toggleMobileSidebar();
+                }
+            });
+
+            connection.on('data', (data) => {
+                packetsReceived++;
+                updateStats();
+                console.log(`Received payload from ${peerId}:`, data.type);
+
+                if (data.type === 'chat') {
+                    storeAndDisplayMessage(peerId, data.sender, data.text, false);
+                } else if (data.type === 'file') {
+                    storeAndDisplayFile(peerId, data.sender, data.fileName, data.fileType, data.fileData, false);
+                } else if (data.type === 'group-chat') {
+                    storeAndDisplayMessage(data.groupId, data.sender, data.text, false);
+                }
+            });
+
+            connection.on('close', () => {
+                console.warn(`Connection closed with ${peerId}`);
+                delete connections[peerId];
+                updateActivePeerUI();
+                appendSystemMessage(`Connection closed with ${peerId}`);
+                if (activeChatId === peerId) {
+                    selectChatChannel(null);
+                }
+            });
+
+            connection.on('error', (err) => {
+                console.error(`Connection error with ${peerId}:`, err);
+            });
+        }
+
+        function disconnectPeer(peerId) {
+            if (connections[peerId]) {
+                connections[peerId].close();
+                delete connections[peerId];
+                updateActivePeerUI();
+                if (activeChatId === peerId) selectChatChannel(null);
+                showToast(`Disconnected from ${peerId}`);
+            }
+        }
+
+        // Active Peer List and Group UI Renderer
+        function updateActivePeerUI() {
+            const list = document.getElementById('active-peer-list');
+            let html = '';
+
+            // Render Bluetooth Channel if connected
+            if (isBluetoothConnected) {
+                const isSelected = activeChatId === 'bluetooth';
+                html += `
+                    <div onclick="selectChatChannel('bluetooth')" class="flex items-center justify-between p-2.5 bg-ctos-bg hover:bg-ctos-card border ${isSelected ? 'border-ctos-accent' : 'border-ctos-accent/40'} rounded-xl cursor-pointer transition-all shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i data-lucide="bluetooth" class="w-4 h-4 text-ctos-accent shrink-0"></i>
+                            <div class="overflow-hidden">
+                                <span class="truncate text-white font-mono font-bold block text-xs">BT: ${bluetoothDevice?.name || 'Peripheral'}</span>
+                                <span class="text-[9px] text-ctos-accent block">Radio Bridge Active</span>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); disconnectBluetooth();" class="text-red-400 hover:text-red-300 p-1" title="Disconnect BT">
+                            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Render Groups
+            for (const [groupId, group] of Object.entries(groups)) {
+                const isSelected = activeChatId === groupId;
+                html += `
+                    <div onclick="selectChatChannel('${groupId}')" class="flex items-center justify-between p-2.5 bg-ctos-bg hover:bg-ctos-card border ${isSelected ? 'border-ctos-accent' : 'border-ctos-border'} rounded-xl cursor-pointer transition-all shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i data-lucide="users" class="w-4 h-4 text-purple-400 shrink-0"></i>
+                            <div class="overflow-hidden">
+                                <span class="truncate text-white font-mono font-bold block text-xs">${group.name}</span>
+                                <span class="text-[9px] text-ctos-muted block">Mesh Group (${group.members.length} peers)</span>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteGroup('${groupId}');" class="text-red-400 hover:text-red-300 p-1" title="Delete Group">
+                            <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Render Connected P2P Peers
+            const peerIds = Object.keys(connections);
+            if (peerIds.length === 0 && Object.keys(groups).length === 0 && !isBluetoothConnected) {
+                html = `<p class="text-ctos-muted text-center py-6 italic text-xs">No active connections or groups.</p>`;
+            } else {
+                peerIds.forEach(peerId => {
+                    const isSelected = activeChatId === peerId;
+                    html += `
+                        <div onclick="selectChatChannel('${peerId}')" class="flex items-center justify-between p-2.5 bg-ctos-bg hover:bg-ctos-card border ${isSelected ? 'border-ctos-accent' : 'border-ctos-border'} rounded-xl cursor-pointer transition-all shadow-sm">
+                            <div class="flex items-center gap-2.5 overflow-hidden">
+                                <span class="w-2.5 h-2.5 rounded-full bg-ctos-accent animate-pulse shrink-0"></span>
+                                <div class="overflow-hidden">
+                                    <span class="truncate text-white font-mono font-bold block text-xs">${peerId}</span>
+                                    <span class="text-[9px] text-ctos-muted block">Direct P2P Active</span>
+                                </div>
+                            </div>
+                            <button onclick="event.stopPropagation(); disconnectPeer('${peerId}');" class="text-red-400 hover:text-red-300 p-1" title="Disconnect">
+                                <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+            }
+
+            list.innerHTML = html;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function selectChatChannel(chatId) {
+            activeChatId = chatId;
+            const titleEl = document.getElementById('current-chat-title');
+            const subEl = document.getElementById('current-chat-subtitle');
+            const inputEl = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+
+            if (!chatId) {
+                titleEl.textContent = 'Broadcast / Unconnected Channel';
+                subEl.textContent = 'Select a peer or group chat channel from the left sidebar.';
+                inputEl.disabled = true;
+                sendBtn.disabled = true;
+                renderMessages([]);
+                updateActivePeerUI();
+                return;
+            }
+
+            inputEl.disabled = false;
+            sendBtn.disabled = false;
+
+            if (chatId === 'bluetooth') {
+                titleEl.textContent = `Bluetooth LE Bridge: ${bluetoothDevice?.name || 'Peripheral'}`;
+                subEl.textContent = 'Proximity Radio LE Data Stream';
+            } else if (groups[chatId]) {
+                titleEl.textContent = `Mesh Group: ${groups[chatId].name}`;
+                subEl.textContent = `Broadcasting to members: ${groups[chatId].members.join(', ')}`;
+            } else {
+                titleEl.textContent = `Secure P2P Channel: ${chatId}`;
+                subEl.textContent = 'Encrypted Direct WebRTC Stream Active';
+            }
+
+            renderMessages(chatHistories[chatId] || []);
+            updateActivePeerUI();
+            if (window.innerWidth < 768) {
+                toggleMobileSidebar();
+            }
+        }
+
+        // Mesh Group Management
+        function openCreateGroupModal() {
+            const container = document.getElementById('group-peer-checkboxes');
+            const peerIds = Object.keys(connections);
+            if (peerIds.length === 0) {
+                container.innerHTML = `<p class="text-ctos-muted italic">Connect to at least one peer first to form a group.</p>`;
+            } else {
+                let html = '';
+                peerIds.forEach(id => {
+                    html += `
+                        <label class="flex items-center gap-2 cursor-pointer text-white">
+                            <input type="checkbox" value="${id}" class="group-peer-checkbox rounded bg-ctos-card border-ctos-border text-ctos-accent focus:ring-0">
+                            <span class="font-mono text-xs">${id}</span>
+                        </label>
+                    `;
+                });
+                container.innerHTML = html;
+            }
+            toggleModal('group-modal');
+        }
+
+        function createMeshGroup() {
+            const nameInput = document.getElementById('group-name-input').value.trim();
+            if (!nameInput) {
+                showToast('Please enter a group name');
+                return;
+            }
+            const checkboxes = document.querySelectorAll('.group-peer-checkbox:checked');
+            const selectedPeers = Array.from(checkboxes).map(cb => cb.value);
+
+            const groupId = 'group-' + Math.random().toString(36).substring(2, 8);
+            groups[groupId] = {
+                name: nameInput,
+                members: selectedPeers
+            };
+
+            localStorage.setItem('ctos_groups', JSON.stringify(groups));
+            toggleModal('group-modal');
+            document.getElementById('group-name-input').value = '';
+            showToast(`Mesh Group "${nameInput}" created!`);
+            selectChatChannel(groupId);
+        }
+
+        function deleteGroup(groupId) {
+            delete groups[groupId];
+            localStorage.setItem('ctos_groups', JSON.stringify(groups));
+            if (activeChatId === groupId) selectChatChannel(null);
+            updateActivePeerUI();
+            showToast('Group deleted');
+        }
+
+        // Messaging and Data Broadcasting
+        function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text || !activeChatId) return;
+
+            input.value = '';
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (activeChatId === 'bluetooth') {
+                // Send over Bluetooth LE if available
+                storeAndDisplayMessage('bluetooth', operatorName, text, true);
+                if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                    showToast("Simulated BLE packet broadcasted.");
+                }
+            } else if (groups[activeChatId]) {
+                // Broadcast to all group members
+                const group = groups[activeChatId];
+                storeAndDisplayMessage(activeChatId, operatorName, text, true);
+                group.members.forEach(peerId => {
+                    if (connections[peerId] && connections[peerId].open) {
+                        connections[peerId].send({
+                            type: 'group-chat',
+                            groupId: activeChatId,
+                            sender: operatorName,
+                            text: text
+                        });
+                        packetsSent++;
+                    }
+                });
+            } else {
+                // Direct P2P
+                const conn = connections[activeChatId];
+                if (conn && conn.open) {
+                    conn.send({
+                        type: 'chat',
+                        sender: operatorName,
+                        text: text
+                    });
+                    storeAndDisplayMessage(activeChatId, operatorName, text, true);
+                    packetsSent++;
+                    updateStats();
+                } else {
+                    showToast('Connection not active');
+                }
+            }
+        }
+
+        function storeAndDisplayMessage(chatId, sender, text, isSelf) {
+            if (!chatHistories[chatId]) chatHistories[chatId] = [];
+            const msg = { sender, text, isSelf, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+            chatHistories[chatId].push(msg);
+
+            if (activeChatId === chatId) {
+                appendMessage(sender, text, isSelf, msg.time);
+            }
+        }
+
+        function appendMessage(sender, text, isSelf, time = '') {
+            const container = document.getElementById('message-container');
+            if (container.querySelector('.my-auto')) container.innerHTML = '';
+
+            const div = document.createElement('div');
+            div.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'} space-y-1`;
+            div.innerHTML = `
+                <div class="flex items-center space-x-2 text-[10px] text-ctos-muted font-mono">
+                    <span class="font-bold text-white">${sender}</span>
+                    <span>${time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div class="max-w-[85%]. sm:max-w-[70%] rounded-2xl px-4 py-3 text-xs sm:text-sm ${isSelf ? 'bg-ctos-accent text-black font-medium rounded-br-none shadow-lg shadow-ctos-accent/10' : 'bg-ctos-card border border-ctos-border text-white rounded-bl-none'} break-all">
+                    ${escapeHtml(text)}
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('message-container');
+            container.innerHTML = '';
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="my-auto mx-auto text-center max-w-sm sm:max-w-md p-6 bg-ctos-card border border-ctos-border rounded-2xl space-y-3 shadow-xl">
+                        <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                            <i data-lucide="message-square" class="w-6 h-6"></i>
+                        </div>
+                        <h4 class="text-white font-bold text-sm sm:text-base">Secure Channel Buffer Clean</h4>
+                        <p class="text-xs text-ctos-muted leading-relaxed">No messages in buffer. Transmit encrypted payloads below.</p>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
+            messages.forEach(m => {
+                appendMessage(m.sender, m.text, m.isSelf, m.time);
+            });
+        }
+
+        function sendFile(e) {
+            const file = e.target.files[0];
+            if (!file || !activeChatId) return;
+
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('File size exceeds 2MB limit for direct P2P transfer.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const base64Data = event.target.result;
+                const payload = {
+                    type: 'file',
+                    sender: operatorName,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileData: base64Data
+                };
+
+                if (connections[activeChatId] && connections[activeChatId].open) {
+                    connections[activeChatId].send(payload);
+                    appendFileMessage(operatorName, file.name, file.type, base64Data, true);
+                    packetsSent++;
+                    updateStats();
+                } else {
+                    showToast('Active peer connection required to transfer files.');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function storeAndDisplayFile(chatId, sender, fileName, fileType, fileData, isSelf) {
+            if (activeChatId === chatId) {
+                appendFileMessage(sender, fileName, fileType, fileData, isSelf);
+            }
+        }
+
+        function appendFileMessage(sender, fileName, fileType, fileData, isSelf) {
+            const container = document.getElementById('message-container');
+            if (container.querySelector('.my-auto')) container.innerHTML = '';
+
+            const div = document.createElement('div');
+            div.className = `flex flex-col ${isSelf ? 'items-end' : 'items-start'} space-y-1`;
+            
+            let previewHTML = `<div class="p-3 bg-black/20 rounded-xl flex items-center gap-3"><i data-lucide="file" class="w-6 h-6 text-ctos-accent"></i><span class="truncate font-mono">${fileName}</span></div>`;
+            if (fileType.startsWith('image/')) {
+                previewHTML = `<img src="${fileData}" class="max-w-[200px] rounded-xl border border-ctos-border mb-1">`;
+            }
+
+            div.innerHTML = `
+                <div class="flex items-center space-x-2 text-[10px] text-ctos-muted font-mono">
+                    <span class="font-bold text-white">${sender}</span>
+                    <span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div class="max-w-[85%] sm:max-w-[70%] rounded-2xl p-3 text-xs ${isSelf ? 'bg-ctos-accent text-black font-medium rounded-br-none shadow-lg' : 'bg-ctos-card border border-ctos-border text-white rounded-bl-none'} space-y-2">
+                    ${previewHTML}
+                    <a href="${fileData}" download="${fileName}" class="block text-center py-1.5 bg-black/30 hover:bg-black/50 rounded-lg text-[11px] font-bold underline transition-colors">Download File</a>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function clearChat() {
+            if (activeChatId) {
+                chatHistories[activeChatId] = [];
+                renderMessages([]);
+                showToast('Channel buffer cleared.');
+            }
+        }
+
+        function updateStats() {
+            const stats = document.getElementById('transfer-stats');
+            if (stats) {
+                stats.textContent = `Packets: ${packetsSent} sent / ${packetsReceived} received`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>
