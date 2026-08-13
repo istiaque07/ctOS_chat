@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ctOS - Decentralized IP Chat</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PeerJS CDN -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ctos: {
+                            bg: '#050b0f',
+                            card: '#0a151d',
+                            border: '#162836',
+                            accent: '#00ffcc',
+                            accentHover: '#00b38f',
+                            muted: '#64748b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #050b0f;
+            color: #e2e8f0;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050b0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #162836;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00ffcc;
+        }
+        .glow-box {
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.15);
+        }
+    </style>
+</head>
+<body class="h-full overflow-hidden flex flex-col">
+
+    <!-- Login / Initialization Modal Screen -->
+    <div id="login-screen" class="fixed inset-0 bg-ctos-bg z-50 flex items-center justify-center p-4">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl glow-box">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                    <i data-lucide="terminal" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-wider text-white">ctOS <span class="text-ctos-accent font-normal text-sm">v2.4</span></h1>
+                <p class="text-xs text-ctos-muted">Decentralized P2P IP Chat & Mesh Terminal</p>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-ctos-muted uppercase tracking-wider">Operator CallSign</label>
+                    <input type="text" id="login-username" required placeholder="e.g. Cipher" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-sm text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent transition-colors">
+                </div>
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-ctos-muted uppercase tracking-wider">Custom Node Suffix (Optional)</label>
+                    <input type="text" id="login-custom-id" placeholder="e.g. alpha" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-sm text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent transition-colors font-mono">
+                </div>
+                <button type="submit" class="w-full py-3.5 bg-ctos-accent text-black font-extrabold rounded-xl hover:bg-ctos-accentHover transition-colors text-sm shadow-lg shadow-ctos-accent/20 flex items-center justify-center gap-2">
+                    <i data-lucide="zap" class="w-4 h-4"></i> Initialize P2P Node
+                </button>
+            </form>
+            <div class="text-center text-[10px] text-ctos-muted">
+                Zero Cloud DB • Direct WebRTC DTLS Encryption • P2P Mesh
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Header -->
+    <header class="bg-ctos-card border-b border-ctos-border px-4 py-3 flex items-center justify-between shrink-0 z-20">
+        <div class="flex items-center gap-3">
+            <button onclick="toggleMobileSidebar()" class="md:hidden p-2 text-ctos-muted hover:text-white rounded-lg bg-ctos-bg border border-ctos-border">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl bg-ctos-accent/10 border border-ctos-accent/30 flex items-center justify-center text-ctos-accent font-bold">
+                    <i data-lucide="cpu" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h2 class="text-xs sm:text-sm font-black tracking-wide text-white uppercase flex items-center gap-2">
+                        ctOS Node <span id="operator-badge" class="text-[10px] bg-ctos-accent/20 text-ctos-accent px-2 py-0.5 rounded font-mono">Operator</span>
+                    </h2>
+                    <div class="flex items-center gap-1.5 text-[10px] text-ctos-muted">
+                        <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                        <span id="status-text">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+            <span id="transfer-stats" class="hidden sm:inline-block font-mono text-[10px] text-ctos-muted bg-ctos-bg px-2.5 py-1 rounded-lg border border-ctos-border">
+                Packets: 0 sent / 0 received
+            </span>
+            <button onclick="toggleModal('console-modal')" class="p-2 bg-ctos-bg border border-ctos-border rounded-xl text-ctos-muted hover:text-ctos-accent transition-colors flex items-center gap-1.5 text-xs">
+                <i data-lucide="terminal" class="w-4 h-4"></i> <span class="hidden sm:inline">Logs</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- App Body Layout -->
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Mobile Sidebar Backdrop -->
+        <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/60 z-30 hidden md:hidden backdrop-blur-sm"></div>
+
+        <!-- Sidebar / Node Configuration Panel -->
+        <aside id="sidebar-panel" class="absolute md:relative inset-y-0 left-0 w-80 bg-ctos-card border-r border-ctos-border flex flex-col shrink-0 z-40 transform -translate-x-full md:translate-x-0 transition-transform duration-300 shadow-2xl md:shadow-none">
+            <div class="p-4 border-b border-ctos-border flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-ctos-accent flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4"></i> Mesh Network Panel
+                </h3>
+                <button onclick="toggleMobileSidebar()" class="md:hidden text-ctos-muted hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-4 space-y-4 overflow-y-auto flex-1">
+                <!-- My Peer ID Box -->
+                <div class="space-y-1.5">
+                    <label class="text-[11px] text-ctos-muted block font-medium">Your Peer Address (Share this)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="my-peer-id" readonly class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2 text-xs text-ctos-accent font-mono select-all focus:outline-none" value="Generating ID...">
+                        <button onclick="copyMyId()" class="p-2.5 bg-ctos-accent text-black font-bold rounded-xl hover:bg-ctos-accentHover transition-colors shrink-0" title="Copy Address">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Send Connection Request Box -->
+                <div class="space-y-1.5 pt-2 border-t border-ctos-border">
+                    <label class="text-[11px] text-ctos-muted block font-medium">Connect to Peer ID</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="target-peer-id" placeholder="Enter Peer ID..." class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2 text-xs text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent">
+                        <button onclick="sendConnectionRequest()" class="px-3.5 py-2 bg-ctos-accent text-black font-bold rounded-xl hover:bg-ctos-accentHover transition-colors text-xs shrink-0 flex items-center gap-1">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Invite
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pending Requests Section -->
+                <div id="pending-requests-section" class="pt-2 border-t border-ctos-border hidden">
+                    <span class="text-[11px] font-bold text-yellow-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+                        <i data-lucide="bell" class="w-3.5 h-3.5"></i> Pending Invites
+                    </span>
+                    <div id="pending-requests-list" class="space-y-2 max-h-40 overflow-y-auto text-xs"></div>
+                </div>
+
+                <!-- Active Channels & Chats -->
+                <div class="pt-4 border-t border-ctos-border space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-ctos-muted uppercase tracking-wider">Active ChatList</span>
+                        <button onclick="openCreateGroupModal()" class="text-[10px] bg-ctos-accent/10 hover:bg-ctos-accent/20 border border-ctos-accent/30 text-ctos-accent px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 font-bold">
+                            <i data-lucide="users" class="w-3 h-3"></i> + Group
+                        </button>
+                    </div>
+                    <div id="active-peer-list" class="space-y-1.5 max-h-56 overflow-y-auto text-xs pr-1">
+                        <p class="text-ctos-muted text-center py-6 italic text-xs">No active connections or groups.</p>
+                    </div>
+                </div>
+
+                <!-- Quick Buffer Clean -->
+                <div class="pt-4 border-t border-ctos-border">
+                    <button onclick="clearChat()" class="w-full py-2.5 bg-ctos-bg border border-ctos-border hover:border-red-500 hover:text-red-400 rounded-xl text-xs transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Clear Channel History
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer Node Info -->
+            <div class="p-3 bg-ctos-bg border-t border-ctos-border text-center text-[10px] text-ctos-muted flex items-center justify-center gap-2">
+                <span>ctOS Mesh v2.4</span>
+                <button onclick="reconnectPeerNode()" class="text-ctos-accent hover:underline flex items-center gap-0.5 font-bold" title="Reset Node">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Reset
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col bg-ctos-bg overflow-hidden relative">
+            <!-- Active Chat Header -->
+            <div class="p-3.5 sm:px-6 bg-ctos-card border-b border-ctos-border flex items-center justify-between shrink-0">
+                <div class="overflow-hidden">
+                    <h3 id="current-chat-title" class="text-xs sm:text-sm font-bold text-white truncate flex items-center gap-2">
+                        <i data-lucide="message-square" class="w-4 h-4 text-ctos-accent"></i> Select a Chat Channel
+                    </h3>
+                    <p id="current-chat-subtitle" class="text-[10px] sm:text-xs text-ctos-muted truncate">Choose a peer or group from the left sidebar chatlist.</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <label id="file-upload-btn" class="p-2 bg-ctos-bg border border-ctos-border hover:border-ctos-accent text-ctos-muted hover:text-ctos-accent rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 text-xs hidden" title="Send File / Attachment">
+                        <i data-lucide="paperclip" class="w-4 h-4"></i>
+                        <input type="file" id="file-input" onchange="sendFile(event)" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Message History Container -->
+            <div id="message-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col">
+                <div class="my-auto mx-auto text-center max-w-sm sm:max-w-md p-6 bg-ctos-card border border-ctos-border rounded-2xl space-y-3 shadow-xl">
+                    <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                        <i data-lucide="shield" class="w-6 h-6"></i>
+                    </div>
+                    <h4 class="text-white font-bold text-sm sm:text-base">Secure P2P Channel Ready</h4>
+                    <p class="text-xs text-ctos-muted leading-relaxed">Connect to any peer address using the sidebar or create a mesh group room to start communicating.</p>
+                </div>
+            </div>
+
+            <!-- Message Input Form -->
+            <form onsubmit="sendMessage(event)" class="p-3 sm:p-4 bg-ctos-card border-t border-ctos-border flex items-center gap-2 shrink-0">
+                <input type="text" id="message-input" disabled placeholder="Select a chat channel to transmit encrypted payload..." class="flex-1 bg-ctos-bg border border-ctos-border rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent disabled:opacity-50">
+                <button type="submit" id="send-btn" disabled class="px-4 sm:px-6 py-3 bg-ctos-accent text-black font-extrabold rounded-xl hover:bg-ctos-accentHover transition-colors text-xs sm:text-sm shadow-lg shadow-ctos-accent/10 flex items-center gap-2 disabled:opacity-50 shrink-0">
+                    <span>Send</span> <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+            </form>
+        </main>
+    </div>
+
+    <!-- Incoming Connection Request Modal -->
+    <div id="request-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-accent/50 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center glow-box">
+            <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-full flex items-center justify-center mx-auto text-ctos-accent">
+                <i data-lucide="user-plus" class="w-6 h-6"></i>
+            </div>
+            <div class="space-y-1">
+                <h3 class="font-bold text-base text-white">Incoming Connection Request</h3>
+                <p id="request-peer-text" class="text-xs text-ctos-accent font-mono break-all">Node: ctos-peer-12345</p>
+            </div>
+            <p class="text-xs text-ctos-muted">An operator is requesting a secure WebRTC data tunnel with your node.</p>
+            <div class="pt-2 flex gap-3">
+                <button onclick="rejectIncomingRequest()" class="flex-1 py-2.5 bg-ctos-bg border border-ctos-border rounded-xl text-xs text-red-400 hover:border-red-500 transition-colors font-bold">
+                    Decline
+                </button>
+                <button onclick="acceptIncomingRequest()" class="flex-1 py-2.5 bg-ctos-accent text-black font-bold rounded-xl text-xs hover:bg-ctos-accentHover transition-colors shadow-lg shadow-ctos-accent/10">
+                    Accept & Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div id="group-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="users" class="w-4 h-4 text-ctos-accent"></i> Create Mesh Group Room
+                </h3>
+                <button onclick="toggleModal('group-modal')" class="text-ctos-muted hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div class="space-y-1">
+                    <label class="text-xs text-ctos-muted">Group Name</label>
+                    <input type="text" id="group-name-input" placeholder="e.g. Ops Squad" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2.5 text-xs text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs text-ctos-muted">Member Peer IDs (comma separated)</label>
+                    <input type="text" id="group-members-input" placeholder="ctos-peer-1, ctos-peer-2" class="w-full bg-ctos-bg border border-ctos-border rounded-xl px-3 py-2.5 text-xs text-white placeholder-ctos-muted focus:outline-none focus:border-ctos-accent font-mono">
+                </div>
+            </div>
+            <div class="pt-2 flex gap-3">
+                <button onclick="toggleModal('group-modal')" class="flex-1 py-2.5 bg-ctos-bg border border-ctos-border rounded-xl text-xs text-ctos-muted hover:text-white transition-colors">
+                    Cancel
+                </button>
+                <button onclick="createGroupRoom()" class="flex-1 py-2.5 bg-ctos-accent text-black font-bold rounded-xl text-xs hover:bg-ctos-accentHover transition-colors shadow-lg">
+                    Create Group
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console Logs Modal -->
+    <div id="console-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-ctos-card border border-ctos-border rounded-2xl max-w-2xl w-full h-[80vh] flex flex-col p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-ctos-border pb-3">
+                <h3 class="font-bold text-sm text-ctos-accent flex items-center gap-2">
+                    <i data-lucide="terminal" class="w-4 h-4"></i> P2P Node Diagnostic Console
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearConsoleLogs()" class="px-2.5 py-1 bg-ctos-bg border border-ctos-border rounded-lg text-xs text-ctos-muted hover:text-white">Clear</button>
+                    <button onclick="toggleModal('console-modal')" class="text-ctos-muted hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="console-logs" class="flex-1 bg-ctos-bg border border-ctos-border rounded-xl p-3 font-mono text-[11px] overflow-y-auto space-y-1">
+                <p class="text-ctos-muted">[System] ctOS Terminal Initialized...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Logic Scripts -->
+    <script>
+        let peer = null;
+        let connections = {}; // Map of peerId -> DataConnection
+        let activeChatId = null; // Currently viewed chat ID (peerId or groupId)
+        let groups = {}; // Map of groupId -> { name: string, members: [string] }
+        let pendingRequests = {}; // Map of peerId -> connection object
+        let incomingRequestPeerId = null;
+        let myId = '';
+        let operatorName = 'Operator';
+        let packetsSent = 0;
+        let packetsReceived = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+
+            try {
+                const cachedName = localStorage.getItem('ctos_operator_name');
+                const cachedCustomId = localStorage.getItem('ctos_custom_id');
+                const cachedGroups = localStorage.getItem('ctos_groups');
+                
+                if (cachedName) document.getElementById('login-username').value = cachedName;
+                if (cachedCustomId) document.getElementById('login-custom-id').value = cachedCustomId;
+                if (cachedGroups) groups = JSON.parse(cachedGroups);
+            } catch(e) {}
+        });
+
+        function refreshIcons() {
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, 50);
+        }
+
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar-panel');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            sidebar.classList.toggle('-translate-x-full');
+            backdrop.classList.toggle('hidden');
+        }
+
+        // Console logger capture
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        function logToConsoleUI(type, args) {
+            const container = document.getElementById('console-logs');
+            if (!container) return;
+            const p = document.createElement('p');
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-ctos-accent';
+            if (type === 'warn') colorClass = 'text-yellow-400';
+            if (type === 'error') colorClass = 'text-red-400';
+
+            p.className = `font-mono ${colorClass}`;
+            p.textContent = `[${timestamp}] [${type.toUpperCase()}] ${Array.from(args).map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`;
+            container.appendChild(p);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        console.log = function() {
+            originalLog.apply(console, arguments);
+            logToConsoleUI('log', arguments);
+        };
+        console.warn = function() {
+            originalWarn.apply(console, arguments);
+            logToConsoleUI('warn', arguments);
+        };
+        console.error = function() {
+            originalError.apply(console, arguments);
+            logToConsoleUI('error', arguments);
+        };
+
+        function clearConsoleLogs() {
+            document.getElementById('console-logs').innerHTML = '<p class="text-ctos-muted">[System] Console logs cleared.</p>';
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('login-username').value.trim();
+            const customSuffix = document.getElementById('login-custom-id').value.trim();
+
+            if (!usernameInput) return;
+
+            operatorName = usernameInput;
+            document.getElementById('operator-badge').textContent = operatorName.toUpperCase();
+
+            localStorage.setItem('ctos_operator_name', operatorName);
+            localStorage.setItem('ctos_custom_id', customSuffix);
+
+            document.getElementById('login-screen').classList.add('hidden');
+
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let randomPart = '';
+            for (let i = 0; i < 5; i++) {
+                randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            myId = customSuffix ? `ctos-${customSuffix}-${randomPart}` : `ctos-${operatorName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${randomPart}`;
+
+            localStorage.setItem('ctos_last_peer_id', myId);
+            initRealPeer(myId);
+        }
+
+        function reconnectPeerNode() {
+            if (peer) {
+                try { peer.destroy(); } catch(e){}
+            }
+            if (!myId) {
+                const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+                let randomPart = '';
+                for (let i = 0; i < 5; i++) {
+                    randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                myId = `ctos-operator-${randomPart}`;
+            }
+            initRealPeer(myId);
+            showToast('Re-initializing P2P Node connection...');
+        }
+
+        function initRealPeer(assignedId) {
+            updateStatus('yellow', 'Connecting...');
+            console.log(`Initializing PeerJS node with ID: ${assignedId}`);
+
+            try {
+                peer = new Peer(assignedId, {
+                    host: '0.peerjs.com',
+                    port: 443,
+                    secure: true,
+                    config: {
+                        'iceServers': [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    },
+                    debug: 2
+                });
+
+                peer.on('open', (id) => {
+                    myId = id;
+                    document.getElementById('my-peer-id').value = id;
+                    updateStatus('green', 'Node Online');
+                    console.log(`Peer connected successfully with ID: ${id}`);
+                    updateActiveChannelsUI();
+                });
+
+                peer.on('connection', (incomingConn) => {
+                    console.log(`Incoming connection request from: ${incomingConn.peer}`);
+                    incomingRequestPeerId = incomingConn.peer;
+                    pendingRequests[incomingConn.peer] = incomingConn;
+                    updatePendingRequestsUI();
+                    
+                    document.getElementById('request-peer-text').textContent = `Node: ${incomingConn.peer}`;
+                    document.getElementById('request-modal').classList.remove('hidden');
+                    refreshIcons();
+                });
+
+                peer.on('error', (err) => {
+                    console.error('PeerJS network error:', err);
+                    updateStatus('red', `Error: ${err.type || 'Failed'}`);
+                    showToast(`P2P Network Notice: ${err.type || 'Connection glitch, click Reset'}`);
+                });
+
+                peer.on('disconnected', () => {
+                    console.warn('Peer disconnected. Reconnecting...');
+                    updateStatus('yellow', 'Reconnecting...');
+                    setTimeout(() => {
+                        if (peer && !peer.destroyed) peer.reconnect();
+                    }, 2000);
+                });
+
+            } catch (e) {
+                console.error('Exception during Peer initialization:', e);
+                updateStatus('red', 'Exception');
+            }
+        }
+
+        function updateStatus(color, text) {
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            
+            dot.className = `w-2 h-2 rounded-full ${color === 'green' ? 'bg-ctos-accent' : color === 'yellow' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'} shrink-0`;
+            statusText.textContent = text;
+        }
+
+        function copyMyId() {
+            const input = document.getElementById('my-peer-id');
+            const value = input.value;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(() => {
+                    showToast('Peer ID copied to clipboard!');
+                }).catch(() => fallbackCopy(input));
+            } else {
+                fallbackCopy(input);
+            }
+        }
+
+        function fallbackCopy(input) {
+            input.select();
+            try {
+                document.execCommand('copy');
+                showToast('Peer ID copied to clipboard!');
+            } catch (err) {
+                showToast('Copy failed, please select manually.');
+            }
+        }
+
+        function sendConnectionRequest() {
+            const targetId = document.getElementById('target-peer-id').value.trim();
+            if (!targetId) {
+                showToast('Please enter a valid Peer ID');
+                return;
+            }
+            if (targetId === myId) {
+                showToast('Cannot connect to your own node ID');
+                return;
+            }
+            if (connections[targetId]) {
+                selectChatChannel(targetId);
+                showToast(`Already connected to ${targetId}`);
+                return;
+            }
+
+            console.log(`Sending connection invite to peer: ${targetId}`);
+            showToast(`Sending invite to ${targetId}...`);
+            
+            if (!peer || peer.destroyed) {
+                showToast('Peer node not active. Click Reset.');
+                return;
+            }
+
+            const outgoingConn = peer.connect(targetId, {
+                reliable: true,
+                metadata: { senderName: operatorName }
+            });
+
+            setupConnection(outgoingConn);
+            document.getElementById('target-peer-id').value = '';
+        }
+
+        function updatePendingRequestsUI() {
+            const section = document.getElementById('pending-requests-section');
+            const list = document.getElementById('pending-requests-list');
+            const peerIds = Object.keys(pendingRequests);
+
+            if (peerIds.length === 0) {
+                section.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+
+            section.classList.remove('hidden');
+            let html = '';
+            peerIds.forEach(id => {
+                html += `
+                    <div class="flex items-center justify-between p-2.5 bg-ctos-bg border border-yellow-500/30 rounded-xl">
+                        <span class="font-mono text-white truncate max-w-[130px]">${id}</span>
+                        <div class="flex gap-1.5">
+                            <button onclick="acceptSpecificRequest('${id}')" class="px-2.5 py-1 bg-ctos-accent text-black font-bold rounded-lg text-[10px] hover:bg-ctos-accentHover">Accept</button>
+                            <button onclick="rejectSpecificRequest('${id}')" class="px-2.5 py-1 bg-ctos-bg border border-red-500 text-red-400 rounded-lg text-[10px]">Decline</button>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+            refreshIcons();
+        }
+
+        function acceptIncomingRequest() {
+            if (incomingRequestPeerId && pendingRequests[incomingRequestPeerId]) {
+                acceptSpecificRequest(incomingRequestPeerId);
+            }
+            document.getElementById('request-modal').classList.add('hidden');
+        }
+
+        function rejectIncomingRequest() {
+            if (incomingRequestPeerId && pendingRequests[incomingRequestPeerId]) {
+                try { pendingRequests[incomingRequestPeerId].close(); } catch(e){}
+                delete pendingRequests[incomingRequestPeerId];
+            }
+            document.getElementById('request-modal').classList.add('hidden');
+            updatePendingRequestsUI();
+            showToast('Request declined');
+        }
+
+        function acceptSpecificRequest(peerId) {
+            const conn = pendingRequests[peerId];
+            if (conn) {
+                setupConnection(conn);
+                delete pendingRequests[peerId];
+                updatePendingRequestsUI();
+                showToast(`Connected to ${peerId}`);
+            }
+        }
+
+        function rejectSpecificRequest(peerId) {
+            const conn = pendingRequests[peerId];
+            if (conn) {
+                try { conn.close(); } catch(e){}
+                delete pendingRequests[peerId];
+            }
+            updatePendingRequestsUI();
+        }
+
+        function setupConnection(connection) {
+            const peerId = connection.peer;
+            
+            connection.on('open', () => {
+                console.log(`WebRTC DataChannel opened with peer: ${peerId}`);
+                connections[peerId] = connection;
+                if (pendingRequests[peerId]) delete pendingRequests[peerId];
+                updatePendingRequestsUI();
+                
+                if (!activeChatId) {
+                    selectChatChannel(peerId);
+                }
+                updateActiveChannelsUI();
+
+                if (window.innerWidth < 768) {
+                    toggleMobileSidebar();
+                }
+            });
+
+            connection.on('data', (data) => {
+                packetsReceived++;
+                updateStats();
+                console.log('Received payload from', peerId, data.type);
+
+                if (data.type === 'chat') {
+                    const targetId = data.groupId || peerId;
+                    appendMessage(data.sender, data.text, false, targetId);
+                    saveMessageToCache({ sender: data.sender, text: data.text, isSelf: false, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), chatId: targetId, type: 'chat' });
+                } else if (data.type === 'file') {
+                    appendFileMessage(data.sender, data.fileName, data.fileType, data.fileData, false, peerId);
+                    saveMessageToCache({ sender: data.sender, fileName: data.fileName, fileType: data.fileType, fileData: data.fileData, isSelf: false, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), chatId: peerId, type: 'file' });
+                }
+            });
+
+            connection.on('close', () => {
+                console.warn('Connection closed by peer:', peerId);
+                delete connections[peerId];
+                updateActiveChannelsUI();
+                if (activeChatId === peerId) {
+                    activeChatId = null;
+                    document.getElementById('current-chat-title').innerHTML = '<i data-lucide="message-square" class="w-4 h-4 text-ctos-accent"></i> Select a Chat Channel';
+                    document.getElementById('current-chat-subtitle').textContent = 'Choose a peer or group from the left sidebar chatlist.';
+                    document.getElementById('message-input').disabled = true;
+                    document.getElementById('send-btn').disabled = true;
+                    document.getElementById('file-upload-btn').classList.add('hidden');
+                }
+            });
+        }
+
+        function updateActiveChannelsUI() {
+            const list = document.getElementById('active-peer-list');
+            const peerIds = Object.keys(connections);
+            const groupIds = Object.keys(groups);
+            const totalCount = peerIds.length + groupIds.length;
+
+            if (totalCount === 0) {
+                list.innerHTML = `<p class="text-ctos-muted text-center py-6 italic text-xs">No active connections or groups.</p>`;
+                refreshIcons();
+                return;
+            }
+
+            let html = '';
+
+            peerIds.forEach(id => {
+                const isActive = activeChatId === id;
+                html += `
+                    <div onclick="selectChatChannel('${id}')" class="flex items-center justify-between p-2.5 bg-ctos-bg hover:bg-ctos-card border ${isActive ? 'border-ctos-accent' : 'border-ctos-border'} rounded-xl cursor-pointer transition-all group shadow-sm">
+                        <div class="flex items-center gap-2.5 overflow-hidden">
+                            <span class="w-2.5 h-2.5 rounded-full bg-ctos-accent animate-pulse shrink-0"></span>
+                            <div class="overflow-hidden">
+                                <span class="truncate text-white font-mono font-bold block text-xs group-hover:text-ctos-accent transition-colors">${id}</span>
+                                <span class="text-[10px] text-ctos-muted block">Direct P2P</span>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); disconnectPeer('${id}');" class="text-red-400 hover:text-red-300 p-1 rounded-lg hover:bg-red-500/10 transition-colors" title="Disconnect">
+                            <i data-lucide="x-circle" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            groupIds.forEach(gId => {
+                const grp = groups[gId];
+                const isActive = activeChatId === gId;
+                html += `
+                    <div onclick="selectChatChannel('${gId}')" class="flex items-center justify-between p-2.5 bg-ctos-bg hover:bg-ctos-card border ${isActive ? 'border-ctos-accent' : 'border-ctos-border'} rounded-xl cursor-pointer transition-all group shadow-sm">
+                        <div class="flex items-center gap-2.5 overflow-hidden">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-400 shrink-0"></span>
+                            <div class="overflow-hidden">
+                                <span class="truncate text-white font-bold block text-xs group-hover:text-ctos-accent transition-colors">${grp.name}</span>
+                                <span class="text-[10px] text-ctos-muted block">Mesh Group (${grp.members.length} peers)</span>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteGroup('${gId}');" class="text-red-400 hover:text-red-300 p-1 rounded-lg hover:bg-red-500/10 transition-colors" title="Leave Group">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            list.innerHTML = html;
+            refreshIcons();
+        }
+
+        function selectChatChannel(chatId) {
+            activeChatId = chatId;
+            const titleEl = document.getElementById('current-chat-title');
+            const subtitleEl = document.getElementById('current-chat-subtitle');
+            const inputEl = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            const fileBtn = document.getElementById('file-upload-btn');
+
+            inputEl.disabled = false;
+            sendBtn.disabled = false;
+            fileBtn.classList.remove('hidden');
+
+            if (groups[chatId]) {
+                titleEl.innerHTML = `<i data-lucide="users" class="w-4 h-4 text-ctos-accent"></i> Group Room: ${groups[chatId].name}`;
+                subtitleEl.textContent = `Decentralized Mesh Channel (${groups[chatId].members.length} peers)`;
+                fileBtn.classList.add('hidden'); // File attachments disabled for group rooms in P2P mesh
+            } else if (connections[chatId]) {
+                titleEl.innerHTML = `<i data-lucide="shield-check" class="w-4 h-4 text-ctos-accent"></i> Secure P2P Channel: ${chatId}`;
+                subtitleEl.textContent = 'Encrypted Direct WebRTC Stream Active';
+            }
+
+            updateActiveChannelsUI();
+            renderChannelMessages(chatId);
+
+            if (window.innerWidth < 768) {
+                toggleMobileSidebar();
+            }
+        }
+
+        function disconnectPeer(peerId) {
+            if (connections[peerId]) {
+                try { connections[peerId].close(); } catch(e){}
+                delete connections[peerId];
+            }
+            if (activeChatId === peerId) {
+                activeChatId = null;
+                document.getElementById('current-chat-title').innerHTML = '<i data-lucide="message-square" class="w-4 h-4 text-ctos-accent"></i> Select a Chat Channel';
+                document.getElementById('current-chat-subtitle').textContent = 'Choose a peer or group from the left sidebar chatlist.';
+                document.getElementById('message-input').disabled = true;
+                document.getElementById('send-btn').disabled = true;
+                document.getElementById('file-upload-btn').classList.add('hidden');
+            }
+            updateActiveChannelsUI();
+        }
+
+        function openCreateGroupModal() {
+            toggleModal('group-modal');
+        }
+
+        function createGroupRoom() {
+            const name = document.getElementById('group-name-input').value.trim();
+            const membersStr = document.getElementById('group-members-input').value.trim();
+
+            if (!name) {
+                showToast('Please provide a group name');
+                return;
+            }
+
+            const members = membersStr ? membersStr.split(',').map(m => m.trim()).filter(Boolean) : [];
+            const groupId = 'grp-' + Math.random().toString(36).substring(2, 8);
+
+            groups[groupId] = { name, members };
+            localStorage.setItem('ctos_groups', JSON.stringify(groups));
+
+            toggleModal('group-modal');
+            document.getElementById('group-name-input').value = '';
+            document.getElementById('group-members-input').value = '';
+
+            selectChatChannel(groupId);
+            updateActiveChannelsUI();
+            showToast(`Mesh group "${name}" created.`);
+        }
+
+        function deleteGroup(groupId) {
+            delete groups[groupId];
+            localStorage.setItem('ctos_groups', JSON.stringify(groups));
+            if (activeChatId === groupId) {
+                activeChatId = null;
+                document.getElementById('current-chat-title').innerHTML = '<i data-lucide="message-square" class="w-4 h-4 text-ctos-accent"></i> Select a Chat Channel';
+                document.getElementById('message-input').disabled = true;
+                document.getElementById('send-btn').disabled = true;
+                document.getElementById('file-upload-btn').classList.add('hidden');
+            }
+            updateActiveChannelsUI();
+        }
+
+        function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+
+            if (!text || !activeChatId) return;
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (groups[activeChatId]) {
+                const payload = {
+                    type: 'chat',
+                    groupId: activeChatId,
+                    sender: operatorName,
+                    text: text
+                };
+
+                groups[activeChatId].members.forEach(memberId => {
+                    if (connections[memberId] && connections[memberId].open) {
+                        connections[memberId].send(payload);
+                        packetsSent++;
+                    }
+                });
+
+                appendMessage('You', text, true, activeChatId);
+                saveMessageToCache({ sender: 'You', text: text, isSelf: true, time: timeStr, chatId: activeChatId });
+            } else if (connections[activeChatId]) {
+                const conn = connections[activeChatId];
+                if (!conn.open) {
+                    showToast('Connection not active');
+                    return;
+                }
+
+                const payload = {
+                    type: 'chat',
+                    sender: operatorName,
+                    text: text
+                };
+
+                conn.send(payload);
+                packetsSent++;
+                updateStats();
+
+                appendMessage('You', text, true, activeChatId);
+                saveMessageToCache({ sender: 'You', text: text, isSelf: true, time: timeStr, chatId: activeChatId });
+            }
+
+            input.value = '';
+            updateStats();
+        }
+
+        function sendFile(event) {
+            const file = event.target.files[0];
+            if (!file || !activeChatId || groups[activeChatId]) return;
+
+            const conn = connections[activeChatId];
+            if (!conn || !conn.open) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('File size exceeds 5MB limit.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const fileData = e.target.result;
+                const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                appendFileMessage('You', file.name, file.type, fileData, true, activeChatId);
+                saveMessageToCache({ sender: 'You', fileName: file.name, fileType: file.type, fileData: fileData, isSelf: true, time: timeStr, chatId: activeChatId, type: 'file' });
+
+                packetsSent++;
+                updateStats();
+
+                conn.send({
+                    type: 'file',
+                    sender: operatorName,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileData: fileData
+                });
+                showToast(`Attachment sent: ${file.name}`);
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function appendMessage(sender, text, isSelf, chatId) {
+            if (activeChatId !== chatId) return;
+
+            const container = document.getElementById('message-container');
+            if (container.querySelector('.my-auto')) {
+                container.innerHTML = '';
+            }
+
+            const div = document.createElement('div');
+            div.className = `flex flex-col max-w-[85%] sm:max-w-[70%] ${isSelf ? 'ml-auto items-end' : 'mr-auto items-start'} space-y-1`;
+
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            div.innerHTML = `
+                <div class="flex items-center gap-2 text-[10px] text-ctos-muted px-1">
+                    <span>${sender}</span>
+                    <span>•</span>
+                    <span>${time}</span>
+                </div>
+                <div class="p-3 rounded-2xl text-xs sm:text-sm leading-relaxed ${isSelf ? 'bg-ctos-accent text-black font-medium rounded-br-none' : 'bg-ctos-card border border-ctos-border text-white rounded-bl-none'} break-all">
+                    ${escapeHtml(text)}
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            refreshIcons();
+        }
+
+        function renderChannelMessages(chatId) {
+            const container = document.getElementById('message-container');
+            container.innerHTML = '';
+
+            try {
+                const history = JSON.parse(localStorage.getItem('ctos_chat_history') || '[]');
+                const channelMsgs = history.filter(m => m.chatId === chatId);
+
+                if (channelMsgs.length === 0) {
+                    container.innerHTML = `
+                        <div class="my-auto mx-auto text-center max-w-sm sm:max-w-md p-6 bg-ctos-card border border-ctos-border rounded-2xl space-y-3 shadow-xl">
+                            <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                                <i data-lucide="shield-check" class="w-6 h-6"></i>
+                            </div>
+                            <h4 class="text-white font-bold text-sm sm:text-base">Channel Secure</h4>
+                            <p class="text-xs text-ctos-muted">Start transmitting messages and attachments securely over direct P2P data tunnel.</p>
+                        </div>
+                    `;
+                    refreshIcons();
+                    return;
+                }
+
+                channelMsgs.forEach(msg => {
+                    if (msg.type === 'file') {
+                        appendFileMessage(msg.sender, msg.fileName, msg.fileType, msg.fileData, msg.isSelf, chatId);
+                    } else {
+                        const div = document.createElement('div');
+                        div.className = `flex flex-col max-w-[85%] sm:max-w-[70%] ${msg.isSelf ? 'ml-auto items-end' : 'mr-auto items-start'} space-y-1`;
+                        div.innerHTML = `
+                            <div class="flex items-center gap-2 text-[10px] text-ctos-muted px-1">
+                                <span>${msg.sender}</span>
+                                <span>•</span>
+                                <span>${msg.time}</span>
+                            </div>
+                            <div class="p-3 rounded-2xl text-xs sm:text-sm leading-relaxed ${msg.isSelf ? 'bg-ctos-accent text-black font-medium rounded-br-none' : 'bg-ctos-card border border-ctos-border text-white rounded-bl-none'} break-all">
+                                ${escapeHtml(msg.text)}
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    }
+                });
+                container.scrollTop = container.scrollHeight;
+                refreshIcons();
+            } catch (err) {
+                console.error('Failed to render history:', err);
+            }
+        }
+
+        function saveMessageToCache(msgObj) {
+            try {
+                let history = JSON.parse(localStorage.getItem('ctos_chat_history') || '[]');
+                history.push(msgObj);
+                if (history.length > 150) history.shift();
+                localStorage.setItem('ctos_chat_history', JSON.stringify(history));
+            } catch (err) {}
+        }
+
+        function appendFileMessage(sender, fileName, fileType, fileData, isSelf, chatId) {
+            if (activeChatId !== chatId) return;
+
+            const container = document.getElementById('message-container');
+            if (container.querySelector('.my-auto')) {
+                container.innerHTML = '';
+            }
+
+            const div = document.createElement('div');
+            div.className = `flex flex-col max-w-[85%] sm:max-w-[70%] ${isSelf ? 'ml-auto items-end' : 'mr-auto items-start'} space-y-1`;
+
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let previewHTML = '';
+            if (fileType && fileType.startsWith('image/')) {
+                previewHTML = `<img src="${fileData}" class="max-h-40 rounded-xl mb-2 object-cover border border-ctos-border w-full">`;
+            }
+
+            div.innerHTML = `
+                <div class="flex items-center gap-2 text-[10px] text-ctos-muted px-1">
+                    <span>${sender} (Attachment)</span>
+                    <span>•</span>
+                    <span>${time}</span>
+                </div>
+                <div class="p-3 rounded-2xl text-xs ${isSelf ? 'bg-ctos-card border border-ctos-accent text-white rounded-br-none' : 'bg-ctos-card border border-ctos-border text-white rounded-bl-none'} space-y-2 w-full max-w-[240px]">
+                    ${previewHTML}
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-ctos-bg rounded-xl border border-ctos-border text-ctos-accent shrink-0">
+                            <i data-lucide="file-text" class="w-5 h-5"></i>
+                        </div>
+                        <div class="overflow-hidden flex-1">
+                            <p class="font-bold truncate text-xs">${escapeHtml(fileName)}</p>
+                            <p class="text-[10px] text-ctos-muted">Direct P2P Transfer</p>
+                        </div>
+                        <a href="${fileData}" download="${fileName}" class="p-2 bg-ctos-accent text-black rounded-xl hover:bg-ctos-accentHover transition-colors shrink-0" title="Download">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            refreshIcons();
+        }
+
+        function clearChat() {
+            if (!activeChatId) return;
+            const container = document.getElementById('message-container');
+            container.innerHTML = `
+                <div class="my-auto mx-auto text-center max-w-sm sm:max-w-md p-6 bg-ctos-card border border-ctos-border rounded-2xl space-y-3 shadow-xl">
+                    <div class="w-12 h-12 bg-ctos-accent/10 border border-ctos-accent/30 rounded-2xl flex items-center justify-center mx-auto text-ctos-accent">
+                        <i data-lucide="shield-check" class="w-6 h-6"></i>
+                    </div>
+                    <h4 class="text-white font-bold text-sm sm:text-base">Buffer Cleared</h4>
+                    <p class="text-xs text-ctos-muted">Local history wiped for this channel.</p>
+                </div>
+            `;
+            
+            try {
+                let history = JSON.parse(localStorage.getItem('ctos_chat_history') || '[]');
+                history = history.filter(m => m.chatId !== activeChatId);
+                localStorage.setItem('ctos_chat_history', JSON.stringify(history));
+            } catch(e) {}
+
+            refreshIcons();
+            showToast('Channel chat buffer cleared');
+        }
+
+        function updateStats() {
+            document.getElementById('transfer-stats').textContent = `Packets: ${packetsSent} sent / ${packetsReceived} received`;
+        }
+
+        function toggleModal(modalId) {
+            document.getElementById(modalId).classList.toggle('hidden');
+            refreshIcons();
+        }
+
+        function showToast(message) {
+            const existingToast = document.getElementById('toast-notification');
+            if (existingToast) existingToast.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'toast-notification';
+            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-ctos-card border border-ctos-accent text-white px-4 py-2 rounded-xl text-xs z-50 shadow-2xl flex items-center gap-2 max-w-[90%] text-center';
+            toast.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4 text-ctos-accent shrink-0"></i> <span class="truncate">${message}</span>`;
+            document.body.appendChild(toast);
+            refreshIcons();
+
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function escapeHtml(string) {
+            return String(string)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
