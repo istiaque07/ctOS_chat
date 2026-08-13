@@ -1,5 +1,5 @@
 # ctOS_chat
-an ipchat based p2p chat app
+an ipchat based p2p chat app [https://istiaque07.github.io/ctOS_chat/]
 ctOS - Decentralized IP Chat & Mesh Network
 
 A fully decentralized, peer-to-peer (P2P) WebRTC data channel and Bluetooth LE communication gateway built for secure, serverless messaging.
